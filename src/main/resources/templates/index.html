@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ポケモンPt/HGSS　バトルファクトリーポケモン検索</title>
+<style>
+    /* テーブル全体の調整 */
+    table {
+        font-size: 0.9em; /* 文字サイズ調整 */
+        border-collapse: collapse; /* ボーダーを結合して二重線を避ける */
+        text-align: center; /* 中央揃え */
+    }
+
+    /* 全てのセル（thとtd）の基本的なスタイル */
+    table, th, td {
+        border: 3px solid #ccc; /* 全てのセルのデフォルトのボーダー */
+        padding: 4px 6px; /* セルの内側の余白を追加 */
+    }
+
+    /* 「タイプ1」と「タイプ2」の右側のボーダーを細くする */
+    table td:nth-child(4), /* タイプ1 */
+    table th:nth-child(4) {
+        border-right: 1.5px solid #ddd; /* 右側のボーダーを細くする */
+    }
+    table td:nth-child(5), /* タイプ2 */
+    table th:nth-child(5) {
+        border-left: 1.5px solid #ddd;  /* 左側のボーダーを細くする */
+        border-right: 3px solid #ccc; /* タイプ2の右側は通常のボーダーでグループを区切る */
+    }
+
+    /* 「技1」から「技4」のボーダーを細くする */
+    table td:nth-child(7), /* 技1 */
+    table th:nth-child(7) {
+        border-right: 1.5px solid #ddd; /* 右側のボーダーを細くする */
+    }
+    table td:nth-child(8), /* 技2 */
+    table th:nth-child(8),
+    table td:nth-child(9), /* 技3 */
+    table th:nth-child(9) {
+		border-left: 1.5px solid #ddd; /* 左側のボーダーを細くする */
+        border-right: 1.5px solid #ccc; /* 右側のボーダーも細くする */
+	}
+    table td:nth-child(10), /* 技4 */
+    table th:nth-child(10) {
+        border-left: 1.5px solid #ddd; /* 左側のボーダーを細くする */
+        border-right: 3px solid #ccc; /* 技4の右側は通常のボーダーでグループを区切る */
+    }
+    
+    /* ネジキが使用するポケモンの行に適用するスタイル */
+    .pokemon-id-highlight {
+        background-color: #e0f2f7; /* 薄い水色 */
+    }
+    
+    /* デフォルトでは内容を非表示にする */
+	.content {
+    	display: none;
+    	overflow: hidden; /* 高さが変わるときのアニメーション準備 */
+    	transition: max-height 0.3s ease-out; /* アニメーションを追加 */
+    	max-height: 0; /* 最初は高さを0にする */
+	}
+
+	/* アクティブな（展開された）時に表示 */
+	.content.active {
+    	max-height: 2000px; /* 十分な高さを設定 (コンテンツに合わせて調整) */
+	}
+
+	/* 折りたたみ可能なヘッダーのスタイル */
+	.collapsible {
+    	cursor: pointer; /* マウスポインタを指マークにする */
+    	background-color: #eee; /* 背景色でクリック可能であることを示す */
+    	padding: 8px;
+    	border: 1px solid #ccc;
+    	text-align: left;
+    	outline: none;
+    	font-size: 1.1em;
+    	font-weight: bold;
+    	margin-top: 15px; /* 上部に少し余白 */
+    	border-radius: 4px; /* 角を丸くする */
+    	display: flex; /* アイコンとテキストを横並びにするため */
+    	align-items: center; /* 垂直方向中央揃え */
+	}
+
+	/* ヘッダーにホバーしたときのスタイル */
+	.collapsible:hover {
+    	background-color: #ddd;
+	}
+	
+	/* アイコンのスタイル */
+	.collapsible .icon {
+    	display: inline-block;
+    	width: 1em; /* アイコンの幅 */
+    	height: 1em; /* アイコンの高さ */
+    	margin-right: 0.5em; /* テキストとの間隔 */
+    	text-align: center;
+    	line-height: 1em;
+    	font-size: 1.2em; /* アイコンのサイズを少し大きく */
+    	font-weight: bold;
+    	color: #555;
+    }
+    	
+    /* アイコンに実際の記号を表示 */
+	.collapsible .icon::before {
+    	content: '\002B'; /* Unicodeのプラス記号 */
+    }
+
+	/* アクティブな（展開された）ヘッダーのアイコンをマイナス記号にする */
+	.collapsible.active .icon::before {
+    	content: '\2212'; /* Unicodeのマイナス記号 */
+	}
+</style>
+</head>
+
+<body>
+<h1>ポケモンPt/HGSS　バトルファクトリーポケモン検索</h1>
+
+	<p><strong>レベルタイプは必須選択です。</strong>
+		<ul>
+			<li>レベルタイプのみ : そのレベルタイプで使用される全てのポケモンを表示。</li>
+			<li>レベルタイプ + 周回 : その周回で使用されるポケモンを表示。</li>
+			<li>レベルタイプ + 周回 + トレーナータイプ + トレーナー名 : そのトレーナーが使用するポケモンを表示。</li>
+			<li>ポケモン名・タイプ・技名で絞り込むことができます。なお技名は、その技を<strong>技1</strong>にもつポケモンが抽出されます。（3・4周目のヒントで有効）</li>
+			<li>背景色が異なるポケモンはネジキが使用するポケモンです。（ネジキを選択したときのみ表示されます）</li>
+		</ul>
+		<h3 class="collapsible"><span class="icon"></span>ステータスと選出ポケモンの仕様</h3>
+		<div class="content">
+			<ul>
+			<li>個体値は、7周目までは「( 周回数 - 1 ) × 4」、8周目以降は「31」です。</li>
+			<li>努力値は、「2つのステータスに各252振り」、「3つのステータスに各170振り」のどちらかです。</li>
+			<li>性別・特性はランダムです。</li>
+			<br>
+			<li>各周回では登場するトレーナーが決まっており、各トレーナーが使用するポケモンは特定のグループから選択されます。<br>
+			　（例）オープン1周目に登場するたんパンこぞうのアックンは、グループ4のポケモンを使用する。（個体値0）<br>
+			　　　　オープン5～6周目に登場するたんパンこぞうのタックンは、グループ4～8のポケモンを使用する。（個体値16）</li>
+			<li>各周回の7戦目には次の周回で登場するトレーナーが登場します。<br>
+			　（例）上記のたんパンこぞうのタックンは、4周目の7戦目で登場することがある。（使用ポケモンや個体値も上記と同様）</li>
+			<li>ネジキが使用するポケモンも特定のグループから選択されます。</li>
+			　レベル50・Pt・銀		グループ4（個体値12）<br>
+			　レベル50・HGSS・銀	グループ4（個体値12）<br>
+			　レベル50・PT・金		グループ4（個体値31）<br>
+			　レベル50・HGSS・金	グループ7～8（個体値31）<br>
+			　オープン・Pt・銀		グループ7～8（個体値12）<br>
+			　オープン・HGSS・銀	グループ4（個体値12）<br>
+			　オープン・Pt・金		グループ7～8（個体値31）<br>
+			　オープン・HGSS・金	グループ7～8（個体値31）<br>
+			</ul>
+		</div>
+	</p>
+
+<form method="get" action="/">
+	<label>レベルタイプ:</label>
+    <select id="levelTypeSelect" name="levelType" class="form-control" th:value="${levelType}" required>
+		<option value="">--選択--</option>
+        <option th:each="type : ${uniqueLevelTypes}" th:value="${type}" th:text="${type}" th:selected="${type == levelType}"></option>
+    </select>
+
+    <label>周回:</label>
+    <select id="round" name="round">
+        <option value="" th:selected="${round == null}">--選択--</option>
+    </select>
+	<br>
+    <label>トレーナータイプ:</label>
+    <select id="trainerType" name="trainerType">
+        <option value="" th:selected="${trainerType == null || trainerType.isEmpty()}">--選択--</option>
+    </select>
+
+    <label>トレーナー名:</label>
+    <select id="trainerName" name="trainerName">
+        <option value="" th:selected="${trainerName == null || trainerName.isEmpty()}">--選択--</option>
+    </select>
+    <br>
+    <label for="pokemonName">ポケモン名:</label>
+    <input type="text" id="pokemonName" name="pokemonName" th:value="${pokemonName}" placeholder="ポケモン名を入力">
+	<br>
+	<label>タイプ:</label>
+    <select id="pokemonType" name="pokemonType">
+        <option value="" th:selected="${pokemonType == null || pokemonType.isEmpty()}">--選択--</option>
+        <option value="ノーマル" th:selected="${pokemonType == 'ノーマル'}">ノーマル</option>
+        <option value="ほのお" th:selected="${pokemonType == 'ほのお'}">ほのお</option>
+        <option value="みず" th:selected="${pokemonType == 'みず'}">みず</option>
+        <option value="でんき" th:selected="${pokemonType == 'でんき'}">でんき</option>
+        <option value="くさ" th:selected="${pokemonType == 'くさ'}">くさ</option>
+        <option value="こおり" th:selected="${pokemonType == 'こおり'}">こおり</option>
+        <option value="かくとう" th:selected="${pokemonType == 'かくとう'}">かくとう</option>
+        <option value="どく" th:selected="${pokemonType == 'どく'}">どく</option>
+        <option value="じめん" th:selected="${pokemonType == 'じめん'}">じめん</option>
+        <option value="ひこう" th:selected="${pokemonType == 'ひこう'}">ひこう</option>
+        <option value="エスパー" th:selected="${pokemonType == 'エスパー'}">エスパー</option>
+        <option value="むし" th:selected="${pokemonType == 'むし'}">むし</option>
+        <option value="いわ" th:selected="${pokemonType == 'いわ'}">いわ</option>
+        <option value="ゴースト" th:selected="${pokemonType == 'ゴースト'}">ゴースト</option>
+        <option value="ドラゴン" th:selected="${pokemonType == 'ドラゴン'}">ドラゴン</option>
+        <option value="あく" th:selected="${pokemonType == 'あく'}">あく</option>
+        <option value="はがね" th:selected="${pokemonType == 'はがね'}">はがね</option>
+    </select>
+    <br>
+    <label for="moveName">技名:</label>
+    <input type="text" id="moveName" name="moveName" th:value="${moveName}" placeholder="技名を入力">
+    <br><br>
+    <button type="submit">検索</button>
+    <button type="button" id="clearButton">クリア</button>
+</form>
+
+
+<table border="1" th:if="${not #lists.isEmpty(pokemons)}">
+	<caption>検索結果</caption>
+	<thead>
+		<tr>
+			<th>周回</th>
+			<th>グループ</th>
+			<th>名前</th>
+			<th>タイプ1</th>
+			<th>タイプ2</th>
+			<th>持ち物</th>
+			<th>技1</th>
+			<th>技2</th>
+			<th>技3</th>
+			<th>技4</th>
+			<th>性格</th>
+			<th>努力値</th>
+			<th>種族値</th>
+			<th>実数値</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr th:each="p : ${pokemons}" th:classappend="${p.id >= 4439} ? 'pokemon-id-highlight' : ''">
+			<td th:text="${p.round}">周回</td>
+			<td th:text="${p.group}">グループ</td>
+			<td th:text="${p.name}">名前</td>
+			<td th:text="${p.type1}">タイプ1</td>
+			<td th:text="${p.type2}">タイプ2</td>
+			<td th:text="${p.heldItem}">持ち物</td>
+			<td th:text="${p.move1}">技1</td>
+			<td th:text="${p.move2}">技2</td>
+			<td th:text="${p.move3}">技3</td>
+			<td th:text="${p.move4}">技4</td>
+			<td th:text="${p.nature}">性格</td>
+			<td th:text="${p.ev}">努力値</td>
+			<td th:text="|${p.baseHp} - ${p.baseAtk} - ${p.baseDef} - ${p.baseSpAtk} - ${p.baseSpDef} - ${p.baseSpeed}|">種族値</td>
+			<td th:text="|${p.calculatedHp} - ${p.calculatedAtk} - ${p.calculatedDef} - ${p.calculatedSpAtk} - ${p.calculatedSpDef} - ${p.calculatedSpeed}|">実数値</td>
+		</tr>
+	</tbody>
+</table>
+
+<p th:if="${#lists.isEmpty(pokemons) and !isInitialLoad}">
+    検索条件に合致するポケモンは見つかりませんでした。
+</p>
+<p th:if="${isInitialLoad}">
+    検索条件を入力してください。
+</p>
+
+<script th:inline="javascript">
+    const allTrainers = /*[[${trainers}]]*/ []; // サーバーから渡される全トレーナーデータ
+
+    // 配列から指定されたキーの一意な値を取得するユーティリティ関数
+    const getUnique = (arr, key) => [...new Set(arr.map(obj => obj[key]).filter(Boolean))];
+    
+    // ネストされた配列（例: roundList）から一意な値を取得するユーティリティ関数
+    const getUniqueFromNested = (arr, key) => {
+        const flattened = arr.flatMap(obj => obj[key] || []); // ネストされた配列を展開
+        return [...new Set(flattened)]; // 一意な値を取得
+    };
+
+    // 各セレクトボックス要素の取得
+    const levelTypeSelect = document.getElementById("levelTypeSelect");
+    const roundSelect = document.getElementById("round");
+    const trainerTypeSelect = document.getElementById("trainerType");
+    const trainerNameSelect = document.getElementById("trainerName");
+	
+	// セレクトボックスのオプションを更新する関数
+	function updateSelect(selectElement, options, selectedValue = null) {
+        selectElement.innerHTML = '<option value="">--選択--</option>';
+        
+        // 初期オプションの選択状態を判定
+    	if (selectedValue === null || selectedValue === "" || selectElement.options.length === 1 && selectedValue === "") {
+        	selectElement.options[0].selected = true;
+    	}
+        
+        options.forEach(o => {
+        	const option = document.createElement("option");
+        	option.value = o;
+        	option.textContent = o;
+        	// 現在の値と一致するかどうかでselectedを設定
+        	if (o == selectedValue) {
+            	option.selected = true;
+        	}
+        	selectElement.appendChild(option);
+    	});
+    }
+    
+	// レベルタイプセレクトボックスの変更イベントリスナー
+    levelTypeSelect.addEventListener("change", () => {
+        const selectedLevelType = levelTypeSelect.value;
+        let filteredTrainers = [];
+        
+        if (selectedLevelType) { // レベルタイプが選択されている場合
+            // 選択されたレベルタイプに基づいてトレーナーをフィルタリング
+            filteredTrainers = allTrainers.filter(t => t.levelType === selectedLevelType);
+            const uniqueRounds = getUniqueFromNested(filteredTrainers, "roundList");
+            updateSelect(roundSelect, uniqueRounds); // 周回セレクトボックスを更新
+        } else { // 「--選択--」が選ばれた場合
+            // 周回、トレーナータイプ、トレーナー名を全てリセット
+            updateSelect(roundSelect, []);
+        }
+        // レベルタイプ選択後は、下位のセレクトボックスもリセット
+        updateSelect(trainerTypeSelect, []);
+        updateSelect(trainerNameSelect, []);
+    });
+    
+    // 周回セレクトボックスの変更イベントリスナー
+    roundSelect.addEventListener("change", () => {
+        const selectedLevelType = levelTypeSelect.value;
+        const selectedRound = parseInt(roundSelect.value); // 数値に変換
+        let filteredTrainers = [];
+
+        if (selectedLevelType && !isNaN(selectedRound)) { // レベルタイプと周回が選択されている場合
+            // 選択されたレベルタイプと周回に基づいてトレーナーをフィルタリング
+            filteredTrainers = allTrainers.filter(t =>
+                t.levelType === selectedLevelType &&
+                t.roundList && t.roundList.includes(selectedRound)
+            );
+            const uniqueTrainerTypes = getUnique(filteredTrainers, "trainerType");
+            updateSelect(trainerTypeSelect, uniqueTrainerTypes); // トレーナータイプセレクトボックスを更新
+        } else { // 周回が「--選択--」または無効な場合
+            // トレーナータイプとトレーナー名をリセット
+            updateSelect(trainerTypeSelect, []);
+        }
+        // 周回選択後は、下位のセレクトボックスもリセット
+        updateSelect(trainerNameSelect, []);
+    });
+
+	// トレーナータイプセレクトボックスの変更イベントリスナー
+    trainerTypeSelect.addEventListener("change", () => {
+        const selectedLevelType = levelTypeSelect.value;
+        const selectedRound = parseInt(roundSelect.value);
+        const selectedTrainerType = trainerTypeSelect.value;
+        let filteredTrainers = [];
+
+        if (selectedLevelType && !isNaN(selectedRound) && selectedTrainerType) { // 全ての条件が選択されている場合
+            // 全ての選択条件に基づいてトレーナーをフィルタリング
+            filteredTrainers = allTrainers.filter(t =>
+                t.levelType === selectedLevelType &&
+                t.roundList && t.roundList.includes(selectedRound) &&
+                t.trainerType === selectedTrainerType
+            );
+            const uniqueNames = getUnique(filteredTrainers, "trainerName");
+            updateSelect(trainerNameSelect, uniqueNames); // トレーナー名セレクトボックスを更新
+        } else { // トレーナータイプが「--選択--」または無効な場合
+            // トレーナー名をリセット
+            updateSelect(trainerNameSelect, []);
+        }
+    });
+    
+    // ページロード時の初期設定
+	const currentLevelType = /*[[${levelType}]]*/ null;
+	const currentRound = /*[[${round}]]*/ null;
+	const currentTrainerType = /*[[${trainerType}]]*/ null;
+	const currentTrainerName = /*[[${trainerName}]]*/ null;
+	
+	// 初回ロード時にセレクトボックスの状態を復元
+	document.addEventListener("DOMContentLoaded", () => {
+
+    	// レベルタイプが選択されている場合、周回以降のセレクトボックスを初期化
+    	if (currentLevelType) {
+        	const filteredTrainers = allTrainers.filter(t => t.levelType === currentLevelType);
+        	const uniqueRounds = getUniqueFromNested(filteredTrainers, "roundList");
+        	updateSelect(roundSelect, uniqueRounds, currentRound); // 現在の周回値を渡す
+        
+        	// 周回も選択されている場合、トレーナータイプ以降を初期化
+        	if (currentLevelType && currentRound && !isNaN(currentRound)) {
+            	const filteredByRound = filteredTrainers.filter(t =>
+                	t.roundList && t.roundList.includes(currentRound)
+            	);
+            	const uniqueTrainerTypes = getUnique(filteredByRound, "trainerType");
+            	updateSelect(trainerTypeSelect, uniqueTrainerTypes, currentTrainerType); // 現在のトレーナータイプを渡す
+            
+            	// トレーナータイプも選択されている場合、トレーナー名を初期化
+            	if (currentLevelType && currentRound && !isNaN(currentRound) && currentTrainerType) {
+                	 const filteredByType = filteredByRound.filter(t =>
+                    	t.trainerType === currentTrainerType
+                	);
+                	const uniqueTrainerNames = getUnique(filteredByType, "trainerName");
+                	updateSelect(trainerNameSelect, uniqueTrainerNames, currentTrainerName); // 現在のトレーナー名を渡す
+            	}
+        	}
+    	}
+	});
+	
+	// クリアボタンのイベントリスナー
+	clearButton.addEventListener("click", () => {
+    	// 全てのセレクトボックスとテキストボックスの値をリセット
+    	levelTypeSelect.value = "";
+    	roundSelect.value = "";
+    	trainerTypeSelect.value = "";
+    	trainerNameSelect.value = "";
+    	document.getElementById("pokemonName").value = ""; 
+    	document.getElementById("pokemonType").value = ""; 
+    	document.getElementById("moveName").value = "";
+
+    	// セレクトボックスのオプションも初期状態に戻す
+    	updateSelect(roundSelect, []);
+    	updateSelect(trainerTypeSelect, []);
+    	updateSelect(trainerNameSelect, []);
+
+    	// フォームのバリデーションを一時的に無効にする
+    	const form = document.querySelector('form');
+    	form.setAttribute('novalidate', 'novalidate'); // HTML5バリデーションを無効化
+
+    	// フォームを送信して、全ての条件がクリアされた状態でページを再ロードする
+    	form.submit(); 
+	}); 
+	
+	document.addEventListener('DOMContentLoaded', function() {
+    var collapsible = document.querySelector('.collapsible');
+    var content = document.querySelector('.content');
+
+    // 初回ロード時は非表示にする
+    content.style.maxHeight = null; // スタイルシートのmax-height: 0; を有効にする
+    content.style.display = 'none'; // 明示的に非表示にする
+
+    collapsible.addEventListener('click', function() {
+        this.classList.toggle('active'); // active クラスのON/OFFを切り替え
+
+        if (content.style.display === 'block') { // もし表示されているなら
+            content.style.maxHeight = null; // max-heightをリセットしてアニメーションさせる
+            content.style.display = 'none'; // 非表示にする
+        } else { // もし非表示なら
+            content.style.display = 'block'; // まず表示にして
+            content.style.maxHeight = content.scrollHeight + "px"; // スクロール可能な高さを設定してアニメーション
+        }
+    });
+});      
+</script>
+</body>
+</html>
